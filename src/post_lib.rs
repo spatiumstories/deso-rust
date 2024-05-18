@@ -55,6 +55,9 @@ pub struct SubmitPostData {
     #[serde(rename = "UpdaterPublicKeyBase58Check")]
     pub public_key: String,
 
+    #[serde(rename = "ParentStakeID")]
+    pub parent_post_hash_hex: Option<String>,
+
     #[serde(rename = "BodyObj")]
     pub body_obj: SubmitPostBodyObject,
 
@@ -65,7 +68,7 @@ pub struct SubmitPostData {
     pub is_hidden: bool,
 
     #[serde(rename = "PostExtraData")]
-    pub extra_data: HashMap<String, String>,
+    pub extra_data: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

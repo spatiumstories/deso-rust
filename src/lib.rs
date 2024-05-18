@@ -136,9 +136,10 @@ pub async fn get_signature_index(
     let json: SignatureIndex = match serde_json::from_str(&text.to_string()) {
         Ok(j) => j,
         Err(e) => {
-            return Err(errors::DesoError::SigningError(
-                (format!("Problem parsing index response: {}", e.to_string())),
-            ));
+            return Err(errors::DesoError::SigningError(format!(
+                "Problem parsing index response: {}",
+                e.to_string()
+            )));
         }
     };
     Ok(json.signature_index as usize)
@@ -392,6 +393,8 @@ pub async fn append_data(
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use super::*;
 
     macro_rules! aw {
@@ -401,40 +404,57 @@ mod tests {
     }
     #[test]
     fn test_create_post() {
-        // dotenv::from_filename("../../.env").ok();
-        // let deso_account = env::var("DESO_ACCOUNT").ok();
-        // let deso_private_key = env::var("PRIVATE_KEY").ok();
+        dotenv::from_filename("src/.env").ok();
+        let deso_account = env::var("DESO_ACCOUNT").ok();
+        let deso_private_key = env::var("PRIVATE_KEY").ok();
+        println!("{:?}", env::current_dir());
+        let deso_account = DesoAccount {
+            name: String::from("Testing"),
+            public_key: deso_account.unwrap(),
+            seed_hex_key: deso_private_key.unwrap(),
+            derived_public_key: None,
+        };
 
-        // let deso_account = DesoAccount {
-        //     name: String::from("Testing"),
-        //     public_key: deso_account.unwrap(),
-        //     seed_hex_key: deso_private_key.unwrap(),
-        //     derived_public_key: None,
-        // };
+        let client = reqwest::Client::new();
 
-        // let client = reqwest::Client::new();
+        let body = post_lib::SubmitPostBodyObject {
+            body: String::from("Testing the new deso rust library by @Spatium!"),
+            image_urls: None,
+            video_urls: None,
+        };
 
-        // let body = post_lib::SubmitPostBodyObject {
-        //     body: format!("Spatium Stories {} Author NFT \nOwning this NFT grants access to the Spatium Stories self publishing.\nExpires on {} \nTerms and Conditions are found here:\nhttps://diamondapp.com/u/Spatium/blog/spatium-stories-author-terms-and-conditions", author_string, expiration_date_string),
-        //     image_urls: None,
-        //     video_urls: None,
-        // };
+        let mut extra_data_map: HashMap<String, String> = HashMap::new();
+        extra_data_map.insert(String::from("nft_type"), String::from("AUTHOR"));
 
-        // let mut extra_data_map: HashMap<String, String> = HashMap::new();
-        // extra_data_map.insert(
-        //     String::from("expiration_date"),
-        //     expiration_date.unix_timestamp().to_string(),
-        // );
-        // extra_data_map.insert(String::from("nft_type"), String::from("AUTHOR"));
+        let post_data = post_lib::SubmitPostData {
+            public_key: deso_account.public_key.clone(),
+            parent_post_hash_hex: None,
+            body_obj: body,
+            fee_rate: 1250,
+            is_hidden: false,
+            extra_data: Some(extra_data_map),
+        };
 
-        // let post_data = post_lib::SubmitPostData {
-        //     public_key: deso_account.public_key.clone(),
-        //     body_obj: body,
-        //     fee_rate: 1250,
-        //     is_hidden: false,
-        //     extra_data: extra_data_map,
-        // };
+        let post_transaction_json = aw!(create_post(&deso_account, &post_data, &client)).unwrap();
 
-        // let post_transaction_json = aw!(create_post(&deso_account, &post_data, &client));
+        let post_hash_hex = post_transaction_json.post_entry_response.post_hash_hex;
+
+        let comment_body = post_lib::SubmitPostBodyObject {
+            body: String::from("cool comment"),
+            image_urls: None,
+            video_urls: None,
+        };
+
+        let comment_post_data = post_lib::SubmitPostData {
+            public_key: deso_account.public_key.clone(),
+            parent_post_hash_hex: Some(post_hash_hex),
+            body_obj: comment_body,
+            fee_rate: 1250,
+            is_hidden: false,
+            extra_data: None,
+        };
+
+        let _comment_transaction_json =
+            aw!(create_post(&deso_account, &comment_post_data, &client)).unwrap();
     }
 }
