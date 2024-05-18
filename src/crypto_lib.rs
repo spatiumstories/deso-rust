@@ -1,17 +1,6 @@
 use crate::errors;
-use bs58;
-use chacha20poly1305::aead::stream;
-use chacha20poly1305::aead::{Aead, AeadInPlace, NewAead};
-use chacha20poly1305::XChaCha20Poly1305;
-use crypto::aead::{AeadDecryptor, AeadEncryptor};
-use crypto::aes_gcm::AesGcm;
-use crypto::chacha20poly1305::ChaCha20Poly1305;
 use hex;
-use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
-use serde::Deserialize;
-use serde::Serialize;
-use std::fs;
-use std::iter::repeat;
+use secp256k1::{Message, Secp256k1, SecretKey};
 
 pub fn sign(
     tx: String,

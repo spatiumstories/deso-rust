@@ -59,7 +59,7 @@ pub struct SpatiumAccounts {
     pub accounts: Vec<DesoAccount>,
     pub admin_key: String,
 }
-
+#[allow(non_camel_case_types)]
 pub enum TransactionType {
     POST,
     MINT,
@@ -105,7 +105,7 @@ pub async fn create_post(
                 ))
             }
         };
-    let post_hash_hex = transaction_json.post_entry_response.post_hash_hex.clone();
+    let _post_hash_hex = transaction_json.post_entry_response.post_hash_hex.clone();
 
     return Ok(transaction_json);
 }
@@ -121,9 +121,10 @@ pub async fn get_signature_index(
     let resp = match client.post(uri).json(&payload).send().await {
         Ok(s) => s,
         Err(e) => {
-            return Err(errors::DesoError::SigningError(
-                (format!("Problem getting index response: {}", e.to_string())),
-            ));
+            return Err(errors::DesoError::SigningError(format!(
+                "Problem getting index response: {}",
+                e.to_string()
+            )));
         }
     };
     let text = match resp.text().await {

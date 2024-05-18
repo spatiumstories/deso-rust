@@ -1,4 +1,3 @@
-use crate::post_lib;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -40,14 +39,6 @@ pub struct NFTData {
 pub struct SubmittedTransaction {
     #[serde(rename = "PostEntryResponse")]
     pub post_entry_response: PostEntryResponse,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PostEntryReaderState {
-    LikedByReader: bool, // True if the reader has liked this post, otherwise false.
-    DiamondLevelBestowed: u8, // Number of diamonds the reader has given this post.
-    RepostedByReader: bool, // True if the reader has reposted this post, otherwise false.
-    RepostPostHashHex: String, // Hex of the Post Hash in which the user has reposted this post.
 }
 
 #[derive(Serialize, Deserialize, Debug)]
