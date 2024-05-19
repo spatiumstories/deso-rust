@@ -46,7 +46,7 @@ To create a new post on the Deso blockchain, follow these steps:
 4. **Create the post**: Call the `create_post` function with the prepared data.
 
    ```rust
-   let post_transaction_json = deso::create_post(&deso_account, &post_data).await.unwrap();
+   let post_transaction_json = deso_sdk::create_post(&deso_account, &post_data).await.unwrap();
    println!("Post created with hash: {:?}", post_transaction_json.post_entry_response.post_hash_hex);
    ```
 
@@ -84,7 +84,7 @@ To create a comment on an existing post, follow these steps:
 4. **Create the comment**: Call the `create_post` function with the prepared data.
 
    ```rust
-   let comment_transaction_json = deso::create_post(&deso_account, &comment_post_data).await.unwrap();
+   let comment_transaction_json = deso_sdk::create_post(&deso_account, &comment_post_data).await.unwrap();
    println!("Comment created with hash: {:?}", comment_transaction_json.post_entry_response.post_hash_hex);
    ```
 

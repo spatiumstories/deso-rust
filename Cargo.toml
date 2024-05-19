@@ -1,5 +1,5 @@
 [package]
-name = "deso"
+name = "deso-sdk"
 version = "0.1.0"
 authors = ["Spatium Stories spatium.nfts@gmail.com"]
 edition = "2021"
