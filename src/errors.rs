@@ -1,8 +1,11 @@
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DesoError {
+    #[error("Missing `{0}`")]
+    DesoAccountError(String),
+    #[error("Missing `{0}`")]
+    SubmitPostDataBuilderError(String),
     #[error("Problem Sending `{0}` Transaction: `{1}`")]
     TransactionError(String, String),
     #[error("Reqwest parsing text error: `{0}`")]

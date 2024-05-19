@@ -2,7 +2,7 @@ use crate::errors;
 use hex;
 use secp256k1::{Message, Secp256k1, SecretKey};
 
-pub fn sign(
+pub(crate) fn sign(
     tx: String,
     seed_hex: String,
     signature_index: usize,
@@ -15,7 +15,6 @@ pub fn sign(
     let secret_key = SecretKey::from_slice(&private_key).unwrap();
 
     // Get transaction bytes
-    println!("TX: {}", tx);
     let transaction_bytes = hex::decode(&tx).expect("Problem decoding transaction");
     let v1_fields_buffer = &transaction_bytes[signature_index + 1..];
     let v0_fields_without_signature = &transaction_bytes[0..signature_index];

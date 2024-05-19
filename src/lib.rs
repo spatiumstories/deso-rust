@@ -1,6 +1,7 @@
-pub mod crypto_lib;
-pub mod errors;
-pub mod post_lib;
+mod crypto_lib;
+mod errors;
+mod post_lib;
+pub use post_lib::SubmitPostDataBuilder;
 use reqwest;
 use serde::Deserialize;
 use serde::Serialize;
@@ -8,7 +9,7 @@ use serde_json;
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TransactionFee {
+struct TransactionFee {
     #[serde(rename = "PublicKeyBase58Check")]
     recipient_public_key: String,
     #[serde(rename = "AmountNanos")]
@@ -16,51 +17,99 @@ pub struct TransactionFee {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ExtraDataBody {
+struct ExtraDataBody {
     #[serde(rename = "TransactionHex")]
     transaction_hex: String,
     #[serde(rename = "ExtraData")]
     extra_data: HashMap<String, String>,
 }
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TransactionHex {
+struct TransactionHex {
     #[serde(rename = "TransactionHex")]
     transaction_hex: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TransactionSubmittedHex {
+struct TransactionSubmittedHex {
     #[serde(rename = "TxnHashHex")]
     txn_hash_hex: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SignatureIndex {
+struct SignatureIndex {
     #[serde(rename = "SignatureIndex")]
     signature_index: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetTransaction {
+struct GetTransaction {
     #[serde(rename = "TxnFound")]
     txn_found: bool,
 }
 
+/// A Deso account that will be used to do any transactions
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DesoAccount {
-    pub name: String,
-    pub public_key: String,
-    pub seed_hex_key: String,
+    /// The deso account public key
+    public_key: String,
+    /// Either the seed hex or derived private key (recommended)
+    seed_hex_key: String,
+    /// The derived public key (needed if using a derived private key)
+    derived_public_key: Option<String>,
+}
+/// A Deso account builder that will be used to do any transactions
+pub struct DesoAccountBuilder {
+    pub public_key: Option<String>,
+    pub seed_hex_key: Option<String>,
     pub derived_public_key: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SpatiumAccounts {
-    pub accounts: Vec<DesoAccount>,
-    pub admin_key: String,
+impl DesoAccountBuilder {
+    pub fn new() -> Self {
+        DesoAccountBuilder {
+            public_key: None,
+            seed_hex_key: None,
+            derived_public_key: None,
+        }
+    }
+    /// The deso account public key
+    pub fn public_key(mut self, public_key: String) -> Self {
+        self.public_key = Some(public_key);
+        self
+    }
+    /// Either the seed hex or derived private key (recommended)
+    pub fn seed_hex_key(mut self, seed_hex_key: String) -> Self {
+        self.seed_hex_key = Some(seed_hex_key);
+        self
+    }
+    /// The derived public key (needed if using a derived private key)
+    pub fn derived_public_key(mut self, derived_public_key: String) -> Self {
+        self.derived_public_key = Some(derived_public_key);
+        self
+    }
+    /// Builds the DesoAccount
+    pub fn build(self) -> Result<DesoAccount, errors::DesoError> {
+        if self.public_key.is_none() {
+            return Err(errors::DesoError::DesoAccountError(String::from(
+                "Public Key",
+            )));
+        }
+        if self.seed_hex_key.is_none() {
+            return Err(errors::DesoError::DesoAccountError(String::from(
+                "Seed Hex or Derived Private Key",
+            )));
+        }
+        Ok(DesoAccount {
+            public_key: self.public_key.unwrap(),
+            seed_hex_key: self.seed_hex_key.unwrap(),
+            derived_public_key: self.derived_public_key,
+        })
+    }
 }
+
 #[allow(non_camel_case_types)]
-pub enum TransactionType {
+#[allow(dead_code)]
+enum TransactionType {
     POST,
     MINT,
     TRANS,
@@ -76,18 +125,16 @@ pub enum TransactionType {
 
 const DEBUG: bool = false;
 
-// let transaction_json = create_post(update, &publisher_account, &post_data, client).await?;
-
 pub async fn create_post(
     publisher_account: &DesoAccount,
     post_data: &post_lib::SubmitPostData,
-    client: &reqwest::Client,
 ) -> Result<post_lib::SubmittedTransaction, errors::DesoError> {
+    let client = reqwest::Client::new();
     let post_uri = "https://node.deso.org/api/v0/submit-post";
 
     let post_transaction_response = submit_and_sign(
         post_uri,
-        client,
+        &client,
         &post_data,
         1,
         TransactionType::POST,
@@ -100,7 +147,7 @@ pub async fn create_post(
             Ok(j) => j,
             Err(e) => {
                 return Err(errors::DesoError::JsonError(
-                    String::from("PUBLISH BOOK"),
+                    String::from("NEW POST ERROR"),
                     e.to_string(),
                 ))
             }
@@ -110,7 +157,7 @@ pub async fn create_post(
     return Ok(transaction_json);
 }
 
-pub async fn get_signature_index(
+async fn get_signature_index(
     tx_hex: &String,
     client: &reqwest::Client,
 ) -> Result<usize, errors::DesoError> {
@@ -146,7 +193,7 @@ pub async fn get_signature_index(
     Ok(json.signature_index as usize)
 }
 
-pub async fn submit_and_sign<T: Serialize + ?Sized>(
+async fn submit_and_sign<T: Serialize + ?Sized>(
     uri: &str,
     client: &reqwest::Client,
     json: &T,
@@ -196,7 +243,9 @@ pub async fn submit_and_sign<T: Serialize + ?Sized>(
             ))
         }
     };
-    println!("BEFORE TX: {}", json.transaction_hex);
+    if DEBUG {
+        println!("BEFORE TX: {}", json.transaction_hex);
+    }
     let mut tx_hex = json;
     if let Some(key) = derived_public_key {
         println!("Derived Public Key: {}", key);
@@ -336,7 +385,7 @@ pub async fn get_post_entry_response(
     Ok(text)
 }
 
-pub async fn submit_transaction(
+async fn submit_transaction(
     tx: &TransactionHex,
     client: &reqwest::Client,
 ) -> Result<String, errors::DesoError> {
@@ -358,7 +407,7 @@ pub async fn submit_transaction(
     }
 }
 
-pub async fn append_data(
+async fn append_data(
     tx: &TransactionHex,
     derived_public_key: String,
     client: &reqwest::Client,
@@ -408,54 +457,37 @@ mod tests {
         dotenv::from_filename("src/.env").ok();
         let deso_account = env::var("DESO_ACCOUNT").ok();
         let deso_private_key = env::var("PRIVATE_KEY").ok();
-        println!("{:?}", env::current_dir());
-        let deso_account = DesoAccount {
-            name: String::from("Testing"),
-            public_key: deso_account.unwrap(),
-            seed_hex_key: deso_private_key.unwrap(),
-            derived_public_key: None,
-        };
 
-        let client = reqwest::Client::new();
-
-        let body = post_lib::SubmitPostBodyObject {
-            body: String::from("Testing the new deso rust library by @Spatium!"),
-            image_urls: None,
-            video_urls: None,
-        };
+        let deso_account = DesoAccountBuilder::new()
+            .public_key(deso_account.unwrap())
+            .seed_hex_key(deso_private_key.unwrap())
+            .build()
+            .unwrap();
 
         let mut extra_data_map: HashMap<String, String> = HashMap::new();
         extra_data_map.insert(String::from("nft_type"), String::from("AUTHOR"));
 
-        let post_data = post_lib::SubmitPostData {
-            public_key: deso_account.public_key.clone(),
-            parent_post_hash_hex: None,
-            body_obj: body,
-            fee_rate: 1250,
-            is_hidden: false,
-            extra_data: Some(extra_data_map),
-        };
+        let post_data = post_lib::SubmitPostDataBuilder::new()
+            .body(String::from(
+                "Testing the new deso rust library by @Spatium!",
+            ))
+            .public_key(deso_account.public_key.clone())
+            .extra_data(extra_data_map)
+            .build()
+            .unwrap();
 
-        let post_transaction_json = aw!(create_post(&deso_account, &post_data, &client)).unwrap();
+        let post_transaction_json = aw!(create_post(&deso_account, &post_data)).unwrap();
 
         let post_hash_hex = post_transaction_json.post_entry_response.post_hash_hex;
 
-        let comment_body = post_lib::SubmitPostBodyObject {
-            body: String::from("cool comment"),
-            image_urls: None,
-            video_urls: None,
-        };
-
-        let comment_post_data = post_lib::SubmitPostData {
-            public_key: deso_account.public_key.clone(),
-            parent_post_hash_hex: Some(post_hash_hex),
-            body_obj: comment_body,
-            fee_rate: 1250,
-            is_hidden: false,
-            extra_data: None,
-        };
+        let comment_post_data = post_lib::SubmitPostDataBuilder::new()
+            .body(String::from("cool comment bro"))
+            .public_key(deso_account.public_key.clone())
+            .parent_post_hash_hex(post_hash_hex)
+            .build()
+            .unwrap();
 
         let _comment_transaction_json =
-            aw!(create_post(&deso_account, &comment_post_data, &client)).unwrap();
+            aw!(create_post(&deso_account, &comment_post_data)).unwrap();
     }
 }
