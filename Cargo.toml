@@ -7,6 +7,9 @@ description = "A Rust SDK for Using the Deso Blockchain"
 license = "MIT"
 repository = "https://github.com/spatiumstories/deso-rust"
 readme = "README.md"
+documentation = "https://docs.rs/deso"
+keywords = ["blockchain", "deso", "decentralized"]
+categories = ["blockchain", "social media"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
