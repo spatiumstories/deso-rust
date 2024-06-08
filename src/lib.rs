@@ -47,6 +47,22 @@ struct GetTransaction {
     txn_found: bool,
 }
 
+/// Determines whether to target the Main node or Test node
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum Node {
+    MAIN,
+    TEST
+}
+
+impl Node {
+    fn get_endpoint(self, api: &str) -> String {
+        match self {
+            Node::MAIN => format!("https://node.deso.org/{}", api),
+            Node::TEST => format!("https://test.deso.org/{}", api)
+        }
+    }
+}
+
 /// A Deso account that will be used to do any transactions
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DesoAccount {
@@ -56,12 +72,15 @@ pub struct DesoAccount {
     seed_hex_key: String,
     /// The derived public key (needed if using a derived private key)
     derived_public_key: Option<String>,
+    /// The Node you are targeting (Main is default)
+    node: Node,
 }
 /// A Deso account builder that will be used to do any transactions
 pub struct DesoAccountBuilder {
     pub public_key: Option<String>,
     pub seed_hex_key: Option<String>,
     pub derived_public_key: Option<String>,
+    pub node: Option<Node>,
 }
 
 impl DesoAccountBuilder {
@@ -70,6 +89,7 @@ impl DesoAccountBuilder {
             public_key: None,
             seed_hex_key: None,
             derived_public_key: None,
+            node: Some(Node::MAIN)
         }
     }
     /// The deso account public key
@@ -85,6 +105,11 @@ impl DesoAccountBuilder {
     /// The derived public key (needed if using a derived private key)
     pub fn derived_public_key(mut self, derived_public_key: String) -> Self {
         self.derived_public_key = Some(derived_public_key);
+        self
+    }
+    /// The Node you are targeting
+    pub fn node(mut self, node: Node) -> Self {
+        self.node = Some(node);
         self
     }
     /// Builds the DesoAccount
@@ -103,6 +128,7 @@ impl DesoAccountBuilder {
             public_key: self.public_key.unwrap(),
             seed_hex_key: self.seed_hex_key.unwrap(),
             derived_public_key: self.derived_public_key,
+            node: self.node.unwrap()
         })
     }
 }
@@ -130,10 +156,11 @@ pub async fn create_post(
     post_data: &post_lib::SubmitPostData,
 ) -> Result<post_lib::SubmittedTransaction, errors::DesoError> {
     let client = reqwest::Client::new();
-    let post_uri = "https://node.deso.org/api/v0/submit-post";
+    let post_uri = publisher_account.node.get_endpoint("api/v0/submit-post");
 
     let post_transaction_response = submit_and_sign(
-        post_uri,
+        &publisher_account.node,
+        &post_uri,
         &client,
         &post_data,
         1,
@@ -158,10 +185,11 @@ pub async fn create_post(
 }
 
 async fn get_signature_index(
+    node: &Node,
     tx_hex: &String,
     client: &reqwest::Client,
 ) -> Result<usize, errors::DesoError> {
-    let uri = "https://node.deso.org/api/v0/signature-index";
+    let uri = node.get_endpoint("api/v0/signature-index");
     let payload = TransactionHex {
         transaction_hex: tx_hex.clone(),
     };
@@ -194,6 +222,7 @@ async fn get_signature_index(
 }
 
 async fn submit_and_sign<T: Serialize + ?Sized>(
+    node: &Node,
     uri: &str,
     client: &reqwest::Client,
     json: &T,
@@ -249,7 +278,7 @@ async fn submit_and_sign<T: Serialize + ?Sized>(
     let mut tx_hex = json;
     if let Some(key) = derived_public_key {
         println!("Derived Public Key: {}", key);
-        tx_hex = match append_data(&tx_hex, key.to_string(), client).await {
+        tx_hex = match append_data(node, &tx_hex, key.to_string(), client).await {
             Ok(t) => t,
             Err(e) => {
                 return Err(errors::DesoError::TransactionError(
@@ -264,7 +293,7 @@ async fn submit_and_sign<T: Serialize + ?Sized>(
     }
 
     // Get signature index
-    let signature_index = get_signature_index(&tx_hex.transaction_hex, client).await?;
+    let signature_index = get_signature_index(node, &tx_hex.transaction_hex, client).await?;
 
     let signed_transaction = crypto_lib::sign(tx_hex.transaction_hex, signer_hex, signature_index)?;
 
@@ -283,7 +312,7 @@ async fn submit_and_sign<T: Serialize + ?Sized>(
 
     while i < retry {
         i += 1;
-        match submit_transaction(&json_transaction_hex, client).await {
+        match submit_transaction(node, &json_transaction_hex, client).await {
             Ok(s) => {
                 response_message = s.clone();
                 txn_hash_hex = match serde_json::from_str(&s) {
@@ -316,12 +345,12 @@ async fn submit_and_sign<T: Serialize + ?Sized>(
     // Now we have submitted a transaction successfully, but let's wait and see
     // if it is through before moving on.
 
-    let transaction_check_uri = "https://node.deso.org/api/v0/get-txn";
+    let transaction_check_uri = node.get_endpoint("api/v0/get-txn");
     let mut pause_count = 0;
     while pause_count < 7 {
         std::thread::sleep(std::time::Duration::from_secs(1 << pause_count));
         match client
-            .post(transaction_check_uri)
+            .post(&transaction_check_uri)
             .json(&txn_hash_hex)
             .send()
             .await
@@ -365,31 +394,12 @@ async fn submit_and_sign<T: Serialize + ?Sized>(
     Ok(response_message)
 }
 
-pub async fn get_post_entry_response(
-    post_hash_hex: String,
-    client: &reqwest::Client,
-) -> Result<String, errors::DesoError> {
-    let get_single_post_data = post_lib::GetSinglePost {
-        post_hash_hex: post_hash_hex,
-        comment_limit: 0,
-    };
-    let uri = "https://node.deso.org/api/v0/get-single-post";
-    let resp = match client.post(uri).json(&get_single_post_data).send().await {
-        Ok(r) => r,
-        Err(e) => return Err(errors::DesoError::ReqwestError(e.to_string())),
-    };
-    let text = match resp.text().await {
-        Ok(t) => t,
-        Err(e) => return Err(errors::DesoError::ReqwestError(e.to_string())),
-    };
-    Ok(text)
-}
-
 async fn submit_transaction(
+    node: &Node,
     tx: &TransactionHex,
     client: &reqwest::Client,
 ) -> Result<String, errors::DesoError> {
-    let uri = "https://node.deso.org/api/v0/submit-transaction";
+    let uri = node.get_endpoint("api/v0/submit-transaction");
     let resp = match client.post(uri).json(&tx).send().await {
         Ok(r) => r,
         Err(e) => return Err(errors::DesoError::ReqwestError(e.to_string())),
@@ -408,11 +418,12 @@ async fn submit_transaction(
 }
 
 async fn append_data(
+    node: &Node,
     tx: &TransactionHex,
     derived_public_key: String,
     client: &reqwest::Client,
 ) -> Result<TransactionHex, errors::DesoError> {
-    let uri = "https://node.deso.org/api/v0/append-extra-data";
+    let uri = node.get_endpoint("api/v0/append-extra-data");
 
     let mut extra_data: HashMap<String, String> = HashMap::new();
 
@@ -461,6 +472,7 @@ mod tests {
         let deso_account = DesoAccountBuilder::new()
             .public_key(deso_account.unwrap())
             .seed_hex_key(deso_private_key.unwrap())
+            .node(Node::TEST)
             .build()
             .unwrap();
 

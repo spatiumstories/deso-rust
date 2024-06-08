@@ -1,6 +1,6 @@
 [package]
 name = "deso-sdk"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Spatium Stories spatium.nfts@gmail.com"]
 edition = "2021"
 description = "A Rust SDK for Using the Deso Blockchain"
